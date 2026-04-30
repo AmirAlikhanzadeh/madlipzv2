@@ -11,7 +11,7 @@ CREATE TABLE IF NOT EXISTS "clips" (
 	"source_metadata" jsonb,
 	"salience_score" real DEFAULT 0 NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"visibility" "visibility" NOT NULL,
+	"visibility" "visibility" DEFAULT 'public' NOT NULL,
 	"tombstone_reason" text
 );
 --> statement-breakpoint
@@ -21,7 +21,7 @@ CREATE TABLE IF NOT EXISTS "dmca_notices" (
 	"represented_party" text NOT NULL,
 	"target_clip_id" uuid,
 	"target_remix_id" uuid,
-	"status" "dmca_status" NOT NULL,
+	"status" "dmca_status" DEFAULT 'received' NOT NULL,
 	"received_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"hold_until_at" timestamp with time zone,
 	"notes" text
@@ -53,8 +53,8 @@ CREATE TABLE IF NOT EXISTS "remixes" (
 	"creator_user_id" uuid NOT NULL,
 	"mode" "remix_mode" NOT NULL,
 	"render_url" text,
-	"render_status" "render_status" NOT NULL,
-	"visibility" "visibility" NOT NULL,
+	"render_status" "render_status" DEFAULT 'queued' NOT NULL,
+	"visibility" "visibility" DEFAULT 'public' NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"supabase_auth_id" uuid NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
-	"profile_state" "profile_state" NOT NULL,
+	"profile_state" "profile_state" DEFAULT 'aspirational' NOT NULL,
 	CONSTRAINT "users_supabase_auth_id_unique" UNIQUE("supabase_auth_id")
 );
 --> statement-breakpoint

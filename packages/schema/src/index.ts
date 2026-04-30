@@ -49,7 +49,9 @@ export const users = pgTable("users", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-  profileState: profileStateEnum("profile_state").notNull(),
+  profileState: profileStateEnum("profile_state")
+    .notNull()
+    .default("aspirational"),
 });
 
 export const clips = pgTable("clips", {
@@ -63,7 +65,7 @@ export const clips = pgTable("clips", {
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
-  visibility: visibilityEnum("visibility").notNull(),
+  visibility: visibilityEnum("visibility").notNull().default("public"),
   tombstoneReason: text("tombstone_reason"),
 });
 
@@ -77,8 +79,8 @@ export const remixes = pgTable("remixes", {
     .references(() => users.id),
   mode: remixModeEnum("mode").notNull(),
   renderUrl: text("render_url"),
-  renderStatus: renderStatusEnum("render_status").notNull(),
-  visibility: visibilityEnum("visibility").notNull(),
+  renderStatus: renderStatusEnum("render_status").notNull().default("queued"),
+  visibility: visibilityEnum("visibility").notNull().default("public"),
   createdAt: timestamp("created_at", { withTimezone: true })
     .notNull()
     .defaultNow(),
@@ -124,7 +126,7 @@ export const dmcaNotices = pgTable("dmca_notices", {
   representedParty: text("represented_party").notNull(),
   targetClipId: uuid("target_clip_id").references(() => clips.id),
   targetRemixId: uuid("target_remix_id").references(() => remixes.id),
-  status: dmcaStatusEnum("status").notNull(),
+  status: dmcaStatusEnum("status").notNull().default("received"),
   receivedAt: timestamp("received_at", { withTimezone: true })
     .notNull()
     .defaultNow(),

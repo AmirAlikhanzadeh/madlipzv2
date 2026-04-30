@@ -1,5 +1,5 @@
 {
-  "id": "21149c9d-1336-4cab-af8d-3644e39c55ec",
+  "id": "56014909-548d-4a66-b16f-3aed82cb9aaa",
   "prevId": "00000000-0000-0000-0000-000000000000",
   "version": "7",
   "dialect": "postgresql",
@@ -52,7 +52,8 @@
           "type": "visibility",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'public'"
         },
         "tombstone_reason": {
           "name": "tombstone_reason",
@@ -123,7 +124,8 @@
           "type": "dmca_status",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'received'"
         },
         "received_at": {
           "name": "received_at",
@@ -380,14 +382,16 @@
           "type": "render_status",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'queued'"
         },
         "visibility": {
           "name": "visibility",
           "type": "visibility",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'public'"
         },
         "created_at": {
           "name": "created_at",
@@ -461,7 +465,8 @@
           "type": "profile_state",
           "typeSchema": "public",
           "primaryKey": false,
-          "notNull": true
+          "notNull": true,
+          "default": "'aspirational'"
         }
       },
       "indexes": {},
