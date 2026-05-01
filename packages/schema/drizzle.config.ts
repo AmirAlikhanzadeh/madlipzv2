@@ -1,3 +1,8 @@
+import { config } from "dotenv";
+
+// .env lives at the repo root, but pnpm filter runs us in packages/schema.
+config({ path: "../../.env" });
+
 import type { Config } from "drizzle-kit";
 
 export default {
