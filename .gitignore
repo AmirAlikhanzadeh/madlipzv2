@@ -8,3 +8,9 @@ dist/
 *.log
 .DS_Store
 coverage/
+
+# Next.js auto-generates this on every build/lint
+apps/web/next-env.d.ts
+
+# TypeScript incremental build artifacts
+*.tsbuildinfo
