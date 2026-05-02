@@ -19,7 +19,7 @@
 -- statement. SECURITY DEFINER so policy checks don't recurse into users RLS.
 CREATE OR REPLACE FUNCTION public.current_user_id() RETURNS uuid AS $$
   SELECT id FROM public.users WHERE supabase_auth_id = auth.uid();
-$$ LANGUAGE sql STABLE SECURITY DEFINER;
+$$ LANGUAGE sql STABLE SECURITY DEFINER SET search_path = public, pg_temp;
 
 -- Auto-create a public.users row when Supabase Auth creates an auth.users row.
 -- Runs as definer so the insert isn't blocked by users RLS (which denies all
@@ -29,7 +29,7 @@ BEGIN
   INSERT INTO public.users (supabase_auth_id) VALUES (NEW.id);
   RETURN NEW;
 END;
-$$ LANGUAGE plpgsql SECURITY DEFINER;
+$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public, pg_temp;
 
 DROP TRIGGER IF EXISTS on_auth_user_created ON auth.users;
 CREATE TRIGGER on_auth_user_created
