@@ -1,0 +1,67 @@
+[
+  {
+    "key": "wholesome",
+    "display_name": "Wholesome",
+    "description": "Affectionate, warm-hearted tone; reads as good-natured rather than ironic."
+  },
+  {
+    "key": "dramatic",
+    "display_name": "Dramatic",
+    "description": "Heightened emotional stakes; intense reaction, awe, or melodrama."
+  },
+  {
+    "key": "cynical",
+    "display_name": "Cynical",
+    "description": "World-weary, deflating, or dismissive framing of the source."
+  },
+  {
+    "key": "affectionate",
+    "display_name": "Affectionate",
+    "description": "Tender or admiring tone toward the subject; sincere, not ironic."
+  },
+  {
+    "key": "mocking",
+    "display_name": "Mocking",
+    "description": "Stance that ridicules the source, the subject, or a target."
+  },
+  {
+    "key": "celebratory",
+    "display_name": "Celebratory",
+    "description": "Stance of hyping, cheering, or triumphalism toward the subject."
+  },
+  {
+    "key": "cringe-flagging",
+    "display_name": "Cringe-flagging",
+    "description": "Stance that marks the source as awkward, embarrassing, or secondhand-embarrassment-inducing."
+  },
+  {
+    "key": "parody",
+    "display_name": "Parody",
+    "description": "Transformation that imitates the source's form for humorous or critical effect."
+  },
+  {
+    "key": "localization",
+    "display_name": "Localization",
+    "description": "Transformation that ports the source into a regional, linguistic, or cultural register."
+  },
+  {
+    "key": "reaction",
+    "display_name": "Reaction",
+    "description": "Transformation built around the creator's face/voice responding to the source."
+  },
+  {
+    "key": "character-voice",
+    "display_name": "Character voice",
+    "description": "Transformation that overlays a distinct persona or impression onto the source."
+  },
+  {
+    "key": "meme-anchor",
+    "display_name": "Meme anchor",
+    "description": "Source or remix that functions as a recognizable meme template or callback."
+  },
+  {
+    "key": "in-joke",
+    "display_name": "In-joke",
+    "description": "Reference legible primarily to a specific community or fandom."
+  }
+]
