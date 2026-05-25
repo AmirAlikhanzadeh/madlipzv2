@@ -12,7 +12,8 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
-    "pg-boss": "^12.18.2"
+    "pg-boss": "^12.18.2",
+    "postgres": "^3.4.5"
   },
   "devDependencies": {
     "@types/node": "^22.9.0",
