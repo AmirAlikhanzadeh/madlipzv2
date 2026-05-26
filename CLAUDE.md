@@ -12,6 +12,7 @@ Turborepo monorepo. Agent Teams: each agent owns ONE branch exclusively.
 ## Branch Ownership (Agent Teams)
 - clip-upload-storage — video ingestion, storage buckets, clips API
 - dmca-intake-funnel — DMCA intake, status state machine, worker email/db
+- marketplace-brand-side — marketplace brand-side schema, RLS, admin CRUD, brand onboarding
 - pg-boss-foundation — async job queue infrastructure, worker patterns
 - taxonomy-eval-foundation — content classification, label governance, eval scoring
 
