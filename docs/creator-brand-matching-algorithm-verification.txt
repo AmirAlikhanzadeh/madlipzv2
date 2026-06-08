@@ -1,0 +1,160 @@
+MADLIPZ V2: CREATOR-BRAND MATCHING ALGORITHM — ADVERSARIAL VERIFICATION REPORT
+Revision 2 Verification, 2026-06-08
+================================================================================
+
+SCOPE
+-----
+
+This report documents the results of an adversarial verification pass conducted
+on creator-brand-matching-algorithm.txt (Revision 2) by an independent reviewer
+with no prior context from the design generation or tournament phases. The
+reviewer was given the Revision 2 document and tasked with verifying that each
+of the five named fixes holds, and with identifying any residual incoherence
+not covered by the five fixes.
+
+A second pass was subsequently performed after targeted patches were applied to
+address residual findings R2, R3, and R4.
+
+================================================================================
+PART 1: FIVE-FIX VERDICT (REVISION 2, PRE-PATCH)
+================================================================================
+
+FIX 1 — HOLDS
+--------------
+The formula is restructured correctly. The hard fidelity floor (Step A) gates
+admission before scoring. The additive modifier is bounded [1.00, 1.25], and
+the worked example arithmetic is correct: Creator A scores 0.890, Creator B
+scores 0.625. The 60% gap-closure argument is sound — a 0.5-cosine creator
+cannot catch a 0.8-cosine creator through secondary signals alone. The edge
+case for Creator C is correctly computed and excluded.
+
+FIX 2 — HOLDS
+--------------
+profile_weight is removed from the score formula. The document marks it
+[RETAINED FOR ANALYTICS ONLY — NOT USED IN SCORE FORMULA] in the schema and
+in the creator fields. The creator_profile_floor WHERE gate is the sole
+maturity mechanism, and it operates before scoring. The original formula in
+the worked example still references profile_weight (correctly, as the "bad
+old" formula), and the revised formula omits it. No double-counting.
+
+FIX 3 — HOLDS
+--------------
+The "shared linear projection layer" is eliminated and the justification is
+technically sound. Both sides use the same paraphrase-multilingual-mpnet-base-v2
+encoder with no downstream alignment. The explanation of why cosine similarity
+is valid across creator and brief vectors — contrastive pretraining over
+multilingual pairs at scale — is correct for this model family. The brief
+assembly strategy (converting structured fields to natural language tokens) is
+coherent with that framing.
+
+FIX 4 — HOLDS
+--------------
+The language_cluster categorical field is gone. MMR operates entirely on
+embedding geometry with λ=0.7. The pseudocode is internally consistent: it
+selects greedily by a relevance-minus-redundancy objective, uses final_score
+for relevance, and uses cosine similarity to already-selected embeddings for
+the diversity penalty. No discrete labels are consulted.
+
+FIX 5 — HOLDS
+--------------
+The upgrade path is now a first-class section with concrete, measurable trigger
+conditions (data volume, brand diversity, calibration drift threshold, offline
+validation gate). The attachment mechanism uses COALESCE over a LEFT JOIN on
+the existing rerank_scores table — no fork of the embedding engine, no schema
+change to match_scores. Rollback is operationally viable. The re-ranker
+operates on the post-MMR shortlist, which is architecturally clean.
+
+================================================================================
+PART 2: RESIDUAL INCOHERENCE (PRE-PATCH)
+================================================================================
+
+R1 — MINOR — Re-ranker input cardinality inconsistency
+-------------------------------------------------------
+MMR reduces the pool to top-N (default 20), but Section 6 stated the
+re-ranker operates on "the top-50 after MMR pass." After an MMR pass selecting
+N=20, there are only 20 items remaining. The re-ranker would reorder 20, not
+50. Minor but a concrete inconsistency in stated cardinalities.
+
+STATUS: Patched in Revision 2.1 — Section 6 now correctly states the
+re-ranker operates on the N=20 post-MMR candidates. Input size scales with N
+if a brief tier raises the default.
+
+R2 — MODERATE — Fidelity threshold schema gap
+----------------------------------------------
+The fidelity_threshold was described as "configurable per brief tier" but
+brand_brief_embeddings had no column to store the per-brief value. The pipeline
+had no documented way to retrieve the correct threshold for a given brief at
+query time. This would block implementation.
+
+STATUS: Patched in Revision 2.1 — brand_brief_embeddings now has
+fidelity_threshold float DEFAULT 0.45. The compute_match_scores job reads it
+from the brief record; the ANN WHERE clause references brief.fidelity_threshold.
+Allowed range [0.35–0.55] defined per tier.
+
+R3 — MODERATE — Cold-start blending schema gap
+-----------------------------------------------
+The blending schedule (0–4 remixes: 70/30, 5–9: 50/50, 10+: 20/80) had no
+corresponding fields in creator_embeddings. The table stored a single
+embedding vector(768) with no prior_embedding, remix_count, or cold_start
+column. An engineer implementing cold-start blending had no place to store the
+prior vector separately from the live content vector, and no stored count to
+determine which blend regime applies.
+
+STATUS: Patched in Revision 2.1 — creator_embeddings now has:
+  prior_embedding vector(768)   set at registration, never overwritten
+  remix_count     int DEFAULT 0 drives blend ratio selection
+  cold_start      bool DEFAULT true
+
+The blending schedule now specifies the exact computation using these columns.
+creator_embedding_refresh writes embedding and remix_count but never touches
+prior_embedding.
+
+R4 — MODERATE — rerank_scores freshness window mismatch
+--------------------------------------------------------
+The Phase 2 COALESCE query used a 48-hour freshness window on rerank_scores,
+but no nightly recompute job for rerank_scores was defined. The monthly
+retraining cadence meant scores would expire daily, requiring undocumented daily
+recomputation. On expiry, the system silently fell back to embedding-only
+ranking with no alerting or documentation of that behavior.
+
+STATUS: Patched in Revision 2.1:
+  - A 4th nightly job compute_rerank_scores(scope: 'brief') is now defined.
+    It is registered at deploy time and no-ops until Phase 2 is activated.
+  - Freshness window changed from 48h to 36h (tighter than the 24h sweep
+    cadence to absorb job delays without gaps).
+  - Silent-fallback behaviour is now explicit: COALESCE falls back to
+    final_score automatically on staleness; an alert fires when rerank_scores
+    rows for an active brief are absent or stale.
+
+R5 — MINOR — Stale-score sweep staleness threshold undefined
+-------------------------------------------------------------
+The nightly sweep job was described as recomputing "stale briefs" but no
+staleness threshold was defined in the job specification. The match_scores
+table has a computed_at column but no stated TTL.
+
+STATUS: No patch required. The threshold is defined in Section 4 Job Triggers
+item 3: "All active briefs with computed_at < now() - interval '24 hours'."
+The verifier note was a misread; the threshold was present in the original
+document.
+
+================================================================================
+FINAL STATUS
+================================================================================
+
+  FIX 1  HOLDS (no patch needed)
+  FIX 2  HOLDS (no patch needed)
+  FIX 3  HOLDS (no patch needed)
+  FIX 4  HOLDS (no patch needed)
+  FIX 5  HOLDS (no patch needed)
+
+  R1     PATCHED (Section 6 cardinality corrected)
+  R2     PATCHED (fidelity_threshold column added to brand_brief_embeddings)
+  R3     PATCHED (prior_embedding, remix_count, cold_start added to creator_embeddings)
+  R4     PATCHED (nightly rerank sweep job added; freshness window corrected to 36h)
+  R5     NOT A BUG (threshold already defined in Section 4 Job Triggers item 3)
+
+The design is internally coherent as of Revision 2.1. No open issues remain.
+
+================================================================================
+END OF VERIFICATION REPORT
+================================================================================

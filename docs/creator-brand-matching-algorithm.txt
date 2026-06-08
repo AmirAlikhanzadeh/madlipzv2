@@ -1,0 +1,961 @@
+MADLIPZ V2: CREATOR-BRAND MATCHING ALGORITHM — REVISED
+Design Report — Revision 2, 2026-06-08
+================================================================================
+
+REVISION LOG
+============
+
+This revision addresses five flaws identified in external review of the original
+winning design (Revision 1, 2026-06-08). The tournament result stands — Approach
+1 (Multilingual Embedding Similarity) remains the winner. All changes are
+contained within the winning design's implementation specification; the
+elimination decisions, hard constraints, and tournament judgment are unaffected.
+
+  FIX 1 — Score formula restructured. Hard fidelity floor added; multiplicative
+           modifier chain replaced with a bounded additive modifier. Cosine
+           similarity dominates ranking by construction. Worked example
+           recomputed.
+
+  FIX 2 — Maturity counted once. profile_weight removed from the score formula.
+           creator_profile_floor hard WHERE gate is the sole maturity mechanism.
+           Within the admitted cohort, ranking is by fidelity and performance
+           only.
+
+  FIX 3 — Shared embedding space redefined. The "shared linear projection layer"
+           is eliminated. Both creator vectors and brief vectors are encoded by
+           the same multilingual sentence transformer with no learned alignment
+           step. Cold-start comparability is a native property of the model's
+           semantic space, not a trained artifact.
+
+  FIX 4 — Diversity guard rewritten. Categorical language_cluster field
+           eliminated; that field was undefined and contradicted the
+           continuous-geometry premise of Section 1. Replaced with Maximal
+           Marginal Relevance (MMR) over embedding distance — a geometry-native
+           diversity pass requiring no discrete language label.
+
+  FIX 5 — Upgrade path promoted to a first-class section. The "Earned Re-Rank
+           Layer" (Section 6) defines the correct architectural verdict
+           ("embedding now, learned re-rank later"), concrete trigger conditions,
+           and an attachment mechanism that does not fork the embedding engine.
+
+================================================================================
+
+PIPELINE SUMMARY
+----------------
+
+Phase 1: 5 generator agents produced distinct approaches:
+  - Approach 1: Multilingual Embedding Similarity
+  - Approach 2: Collaborative Filtering
+  - Approach 3: Semantic Graph / Spreading Activation
+  - Approach 4: Contextual Multi-Armed Bandit (VoiceBandit)
+  - Approach 5: Dark-Social Diffusion Graph + Cultural Cluster Routing
+
+Phase 2: Adversarial verifier (separate context) eliminated 3:
+  - Approach 2 ELIMINATED: Language treated as a pseudo-label in the item
+    space, structurally interchangeable with any demographic tag. The score
+    formula contains no language term. Fails Constraints 2 and 3.
+  - Approach 3 ELIMINATED: DARK_DIFFUSED edge weight > 1.0 with product-of-
+    weights activation and no hop ceiling produces unbounded scores. BriefNode
+    ephemerality contradicts their required presence in active graph traversals
+    for the creator-facing syndicate path.
+  - Approach 5 ELIMINATED: Dark-social chain reconstruction via parent_event_id
+    requires referrer data that dark-social channels structurally cannot provide
+    (dark-social erases referrer headers). Language fidelity relegated to a
+    capped 30% bonus modifier. Fails Constraint 2; fatal internal incoherence.
+
+Phase 3: Tournament (pairwise) decided Approach 1 over Approach 4, 4 criteria
+  to 1.
+
+HARD CONSTRAINTS ENFORCED
+--------------------------
+
+  1. Matching engine must be architecturally unified with Voice Syndicate
+     (same engine, two surfaces — not "similar logic").
+  2. Native-language/cultural-voice fidelity is a first-class ranking signal,
+     not a post-filter.
+  3. Must exploit the 80+ language creator network as a differentiator, not
+     treat language as swappable metadata.
+  4. No crypto-token or purchasable-rank tethering anywhere in the mechanism.
+
+TOURNAMENT RUBRIC RESULTS
+--------------------------
+
+  Criterion 1 — Language/Cultural Fidelity:        Winner: Embedding (A)
+  Criterion 2 — Cold-Start Behavior:               Winner: Embedding (A)
+  Criterion 3 — Dark-Social Diffusion Signal:      Winner: Bandit (B)
+  Criterion 4 — Implementability on Stack:         Winner: Embedding (A)
+  Criterion 5 — Voice Syndicate Architectural Fit: Winner: Embedding (A)
+
+  Final: Embedding wins 4-1. WINNER: Multilingual Embedding Similarity.
+
+================================================================================
+WINNING DESIGN: MULTILINGUAL EMBEDDING SIMILARITY (REVISED)
+================================================================================
+
+OVERVIEW
+--------
+
+The engine operates on a single 768-dimensional embedding space where creator
+voice profiles and brand brief requirements are represented as dense vectors
+produced by the same multilingual sentence transformer. Cosine similarity
+between these vectors is the primary scoring primitive and the dominant ranking
+signal. Both Voice Syndicate surfaces — creator-facing (here is a sports moment
+to react to) and brand-facing (here is a creator whose audience matches your
+brief) — query the same materialized score table with different filter
+predicates. There is no fork.
+
+Revision 2 change summary: (a) the score formula now enforces a hard fidelity
+floor and uses a bounded additive modifier so cosine similarity cannot be
+overridden by secondary signals; (b) maturity is enforced exactly once, at the
+WHERE clause, not in the score; (c) both sides of the embedding comparison use
+the same transformer with no learned alignment layer; (d) the diversity guard
+uses geometric MMR instead of categorical language clusters; and (e) the upgrade
+path to a learned re-ranker is specified as a first-class architectural phase.
+
+--------------------------------------------------------------------------------
+SECTION 1: INPUTS
+--------------------------------------------------------------------------------
+
+CREATOR SIDE
+------------
+
+A creator embedding is a 768-dimensional dense vector computed as the
+salience-weighted mean of multilingual sentence transformer encodings
+(paraphrase-multilingual-mpnet-base-v2, or a fine-tuned sport-domain variant)
+over all of a creator's remix clips. Each clip's embedding is derived from its
+transcript text and label tokens concatenated into a single input string. The
+transformer encodes this string directly — no downstream projection.
+
+The resulting vector occupies a continuous, culturally-graded position in the
+shared embedding space. A creator producing 70% Spanish and 30% Portuguese
+content occupies a position in embedding space that reflects both, preserving
+the cultural-linguistic texture. Language is NOT a categorical flag — it is a
+geometric location in a space trained on hundreds of millions of multilingual
+examples.
+
+Schema columns that feed the creator embedding:
+
+  - remix_labels.label_id joined to labels.key / labels.displayName
+    (confidence-weighted; source='human' labels get 1.5x weight over 'llm')
+  - remix_labels.confidence (scales each label's contribution)
+  - remixes.mode (reaction vs. dub signals cultural commentary vs. vocal
+    performance; feeds style dimension of embedding)
+  - clips.salienceScore (mean and variance; weights clip contributions to
+    the embedding mean)
+  - clips.visibility (only 'public' records feed the embedding)
+
+Additional scalar signals computed per creator and stored alongside the
+embedding (not embedded; applied at ranking time):
+
+  dark_social_ratio:
+    private-channel click events / total share events, 30-day rolling window.
+    Private-channel: referrer IS NULL or matches WhatsApp/Telegram/iMessage
+    UA patterns on madlipz.to/{short-id} watermark link clicks.
+    Range: [0.0, 1.0]. Stored in creator_embeddings table.
+
+  normalized_salience:
+    Creator's mean clips.salienceScore, normalized to [0,1] across active
+    creator population. Stored in creator_embeddings table.
+
+  profile_weight: [RETAINED FOR ANALYTICS ONLY — NOT USED IN SCORE FORMULA]
+    Stored in creator_embeddings for reporting. Removed from score computation
+    per FIX 2. Maturity is enforced by the creator_profile_floor hard gate;
+    this column is not consulted at ranking time.
+
+BRAND SIDE
+----------
+
+Brand brief embedding: a 768-dimensional dense vector produced by the SAME
+multilingual sentence transformer used for creator embeddings, with NO learned
+projection layer. [FIX 3]
+
+The brief's structured fields are composed into a natural-language prompt string
+and encoded directly:
+
+  Input text assembled from required fields at brief creation time:
+    - target_language_codes text[]
+      Language names are converted to human-readable strings
+      (e.g., ["es", "pt"] → "Spanish Portuguese") and included in the input.
+    - target_sentiment text
+      Free-text description of desired emotional register (e.g., "high-energy
+      celebration," "respectful commentary"). Included verbatim.
+    - content_category_ids uuid[]
+      FK references resolved to labels.displayName values and included as
+      comma-separated tokens.
+    - campaign_sport text, campaign_moment_type text
+      Included as content tokens.
+
+  Example assembled string for a brief targeting Spanish football celebration:
+    "Spanish language sports football championship celebration high-energy
+    vocal commentary audience excitement"
+
+  This string is encoded with paraphrase-multilingual-mpnet-base-v2 to produce
+  the brief's 768-dimensional embedding.
+
+WHY CREATOR AND BRIEF VECTORS ARE COMPARABLE WITHOUT A PROJECTION LAYER:
+
+  Multilingual sentence transformers are trained with contrastive objectives
+  over naturally occurring text pairs at massive scale. The model learns to
+  place semantically similar content close in its output space regardless of
+  surface form. A creator whose remixes consist of "¡Increíble gol! ¡Campeones!"
+  with label tokens "football, Spanish, celebration" and a brief assembled as
+  "Spanish football championship high-energy celebration" produce similar vectors
+  because the model has encountered millions of semantically equivalent pairs
+  across dozens of languages during pretraining. No alignment layer is needed or
+  appropriate: the transformer IS the alignment. Adding a learned linear
+  projection between the two sides would require paired (creator, brief)
+  conversion outcome data that does not exist at launch, creating a cold-start
+  failure for the core similarity primitive. Eliminating the projection means
+  the comparison is valid on day zero.
+
+  creator_profile_floor text (enum) — BRAND BRIEF FIELD, NOT CREATOR FIELD
+    Values: aspirational_ok | blended_min | data_derived_only
+    Applied as a hard WHERE gate at retrieval time. This is the sole place where
+    profile maturity enters the system. It is not a score modifier.
+
+Brief embeddings are computed at creation time and recomputed on any edit.
+
+POSTGRES STORAGE
+----------------
+
+  creator_embeddings (
+    user_id              uuid PRIMARY KEY,
+    embedding            vector(768),        -- pgvector column; blended result
+    prior_embedding      vector(768),        -- survey-derived prior; set at registration, never overwritten
+    remix_count          int     DEFAULT 0,  -- drives blend ratio in creator_embedding_refresh
+    cold_start           bool    DEFAULT true,
+    dark_social_ratio    float,
+    normalized_salience  float,
+    profile_weight       float,              -- analytics only, not used in score
+    updated_at           timestamptz
+  )
+
+  brand_brief_embeddings (
+    brief_id             uuid PRIMARY KEY,
+    embedding            vector(768),
+    fidelity_threshold   float   DEFAULT 0.45,  -- per-brief floor; read by compute_match_scores
+    updated_at           timestamptz
+  )
+
+  match_scores (
+    creator_id       uuid,
+    brief_id         uuid,
+    cosine_sim       float,                  -- stored separately for floor check
+    final_score      float,
+    computed_at      timestamptz,
+    PRIMARY KEY (creator_id, brief_id)
+  )
+
+  -- Phase 2 table (defined now, populated when Section 6 triggers are met):
+  rerank_scores (
+    creator_id       uuid,
+    brief_id         uuid,
+    rerank_score     float,
+    model_version    text,
+    computed_at      timestamptz,
+    PRIMARY KEY (creator_id, brief_id)
+  )
+
+Indexes:
+  IVFFlat on creator_embeddings.embedding
+  IVFFlat on brand_brief_embeddings.embedding
+  (brief_id, final_score DESC) on match_scores
+  (creator_id, final_score DESC) on match_scores
+
+--------------------------------------------------------------------------------
+SECTION 2: SCORING AND RANKING MECHANISM
+--------------------------------------------------------------------------------
+
+SCORE FORMULA [FIX 1 + FIX 2]
+------------------------------
+
+The original formula was a pure multiplicative chain:
+
+  ORIGINAL (superseded):
+    final_score = cosine_sim × profile_weight × (1+0.3×dark_social)
+                  × (0.5+0.5×salience)
+
+  This formula had two structural defects:
+  (a) The combined non-fidelity multiplier had a 6.5× dynamic range
+      (0.4×1.0×0.5=0.20 to 1.0×1.3×1.0=1.30), while cosine_sim spans [0,1].
+      A 0.5-fidelity mature/viral creator could outrank a 0.8-fidelity new
+      creator by up to 4:1 — the exact violation of Constraint 2.
+  (b) profile_weight double-penalized maturity that creator_profile_floor
+      already gates as a hard WHERE clause.
+
+The revised formula enforces fidelity dominance by two mechanisms:
+
+  STEP A — Hard Fidelity Floor (pre-score gate):
+    A creator is admitted to scoring only when:
+      cosine_sim(creator_embedding, brief_embedding) >= brief.fidelity_threshold
+
+    brief.fidelity_threshold is stored in brand_brief_embeddings.fidelity_threshold
+    (DEFAULT 0.45) and is set by the brand at brief creation time via the brief
+    submission form. Allowed range: [0.35, 0.55]. The compute_match_scores job
+    reads this value from brand_brief_embeddings when it loads the brief record;
+    no separate configuration lookup is needed.
+
+    Permitted values by brief tier:
+      - Broad discovery briefs: 0.35 (wider funnel, lower certainty of fit)
+      - Standard briefs:        0.45 (default)
+      - Precision audience:     0.55 (narrow funnel, high certainty required)
+
+    Applied before the score formula — a creator below the floor does not receive
+    a score and cannot appear in any shortlist regardless of how strong their
+    dark-social or salience signals are.
+
+    In a well-calibrated 768-dim sentence transformer space, cosine_sim < 0.45
+    represents near-random semantic association. No amount of community reach
+    or platform tenure justifies surfacing a creator whose content is
+    semantically disconnected from the brief.
+
+  STEP B — Bounded Additive Modifier (score formula for admitted creators):
+
+    final_score = cosine_sim(creator_embedding, brief_embedding)
+                × (1 + 0.15 × dark_social_ratio
+                     + 0.10 × normalized_salience)
+
+    Modifier properties:
+      - Range of the parenthesized term: [1.00, 1.25]
+        (minimum: dark_social=0, salience=0 → 1.00)
+        (maximum: dark_social=1, salience=1 → 1+0.15+0.10=1.25)
+      - Maximum possible boost from secondary signals: +25% of cosine_sim
+      - To close the gap between a 0.8-fidelity creator and a 0.5-fidelity
+        creator using secondary signals alone requires a 60% boost, which
+        the formula's cap of 25% cannot produce. Fidelity dominates by
+        construction.
+
+    Interpretation of terms:
+      - dark_social_ratio boost (max +15%): rewards creators whose content
+        travels through private channels — authentic community resonance
+        not attributable to algorithmic amplification.
+      - normalized_salience boost (max +10%): rewards creators with
+        consistently high-salience clips, reflecting content that holds
+        audience attention.
+      - profile_weight: REMOVED. Maturity is enforced exclusively by the
+        creator_profile_floor WHERE gate (FIX 2). Within the admitted
+        cohort, a new creator who passes the fidelity floor and a veteran
+        who passes it are ranked purely on fidelity and performance signals.
+
+WORKED EXAMPLE: OLD vs. NEW FORMULA [FIX 1]
+--------------------------------------------
+
+Scenario: A brief targets Spanish-language football celebration content with
+high vocal energy.
+
+  Creator A — New Spanish football creator
+    cosine_sim = 0.82  (strong semantic match: Spanish, football, high-energy)
+    profile_weight = 0.4 (aspirational; few remixes)
+    dark_social_ratio = 0.30 (moderate private-channel sharing)
+    normalized_salience = 0.40 (limited clip history)
+
+  Creator B — Veteran English-language sports creator
+    cosine_sim = 0.52  (partial match: sports adjacent, but English, not Spanish)
+    profile_weight = 1.0 (data_derived; extensive history)
+    dark_social_ratio = 0.75 (strong dark-social track record)
+    normalized_salience = 0.90 (high-salience established catalog)
+
+  ORIGINAL FORMULA (superseded):
+
+    Creator A: 0.82 × 0.4 × (1+0.3×0.30) × (0.5+0.5×0.40)
+             = 0.82 × 0.4 × 1.09 × 0.70
+             = 0.250
+
+    Creator B: 0.52 × 1.0 × (1+0.3×0.75) × (0.5+0.5×0.90)
+             = 0.52 × 1.0 × 1.225 × 0.95
+             = 0.605
+
+    Creator B outranks A: 0.605 / 0.250 = 2.42:1
+    CONSTRAINT 2 VIOLATION: The English creator beats the Spanish creator
+    for a Spanish brief by more than 2:1. Language fidelity is not first-class.
+
+  REVISED FORMULA:
+
+    Fidelity floor check (FIDELITY_THRESHOLD = 0.45):
+      Creator A: 0.82 >= 0.45 — ADMITTED
+      Creator B: 0.52 >= 0.45 — ADMITTED
+
+    Creator A: 0.82 × (1 + 0.15×0.30 + 0.10×0.40)
+             = 0.82 × (1 + 0.045 + 0.040)
+             = 0.82 × 1.085
+             = 0.890
+
+    Creator B: 0.52 × (1 + 0.15×0.75 + 0.10×0.90)
+             = 0.52 × (1 + 0.1125 + 0.090)
+             = 0.52 × 1.2025
+             = 0.625
+
+    Creator A outranks B: 0.890 > 0.625
+    The Spanish-language new creator correctly ranks first. Even with Creator
+    B at maximum dark-social (1.0) and maximum salience (1.0), their best
+    possible score is 0.52 × 1.25 = 0.650, still below Creator A's baseline
+    score of 0.82 × 1.00 = 0.820.
+
+  EDGE CASE — Fidelity floor protecting against modifier-inflated low-fidelity:
+
+    Creator C — viral creator, poor semantic match
+      cosine_sim = 0.40  (marginal; different sport, different linguistic region)
+      dark_social_ratio = 1.0  (extremely high dark-social)
+      normalized_salience = 1.0  (very high salience)
+
+    Fidelity floor check: 0.40 < 0.45 — EXCLUDED regardless of modifiers.
+
+    Under original formula (no floor): 0.40 × 1.0 × 1.30 × 1.0 = 0.520
+    Creator C would have ranked above Creator B in the old formula despite
+    being semantically misaligned with the brief. The fidelity floor prevents
+    this class of failure entirely.
+
+RANKING PIPELINE
+----------------
+
+Step 1 — ANN Shortlist:
+  Retrieve top-200 creators by cosine similarity using pgvector's <=> operator
+  with the IVFFlat index. This step is approximate and fast. The per-brief
+  fidelity_threshold is applied here as a WHERE clause:
+    WHERE creator_profile_floor_condition(brief.creator_profile_floor,
+                                          ce.profileState)
+      AND 1 - (ce.embedding <=> be.embedding) >= brief.fidelity_threshold
+
+Step 2 — Exact Re-Rank:
+  Compute final_score for all admitted candidates using the revised formula:
+    final_score = cosine_sim × (1 + 0.15 × dark_social_ratio
+                                  + 0.10 × normalized_salience)
+  Store cosine_sim and final_score separately in a working set (not yet
+  persisted to match_scores at this step — persistence happens in the job).
+
+Step 3 — Diversity Guard via MMR [FIX 4]:
+  Apply Maximal Marginal Relevance selection over the re-ranked candidate set.
+  This step is geometry-native: it uses the embedding vectors directly and
+  requires no categorical language cluster field.
+
+  MMR selection algorithm (application layer, applied to top-50 candidates
+  from Step 2 to produce the final top-N):
+
+    λ = 0.7  (configurable; 0.7 = 70% relevance weight, 30% diversity weight)
+    N = 20   (default for brand-facing discovery)
+
+    selected = []
+    pool = candidates sorted by final_score DESC (up to 50)
+
+    while len(selected) < N and pool is not empty:
+      if selected is empty:
+        best = pool[0]              // first pick is simply highest score
+      else:
+        best = argmax over pool:
+          λ × normalize(c.final_score)
+          − (1−λ) × max(cosine_sim(c.embedding, s.embedding)
+                        for s in selected)
+        // normalize: final_score / max(final_score in pool)
+
+      append best to selected
+      remove best from pool
+
+    return selected
+
+  Properties of this approach:
+  - No "language_cluster" field is defined or consulted (eliminating the
+    undefined categorical field that contradicted the continuous-geometry
+    premise of Section 1).
+  - Linguistic diversity emerges automatically: if the top-5 candidates all
+    have near-identical embeddings (implying the same language/cultural region),
+    their mutual cosine_sim scores are high, and the (1−λ) penalty term will
+    favor the next candidate who occupies a different region of the space.
+  - For narrowly-specified briefs (e.g., brief explicitly targets a single
+    language), candidates will naturally have dispersed embeddings once that
+    language cluster is exhausted, and MMR behaves like a relevance-only
+    selection. The diversity mechanism activates exactly when it is needed:
+    underspecified briefs with clustering risk.
+  - λ is configurable per brief tier. Brands running explicit multi-language
+    discovery briefs can reduce λ to 0.5 to maximize linguistic diversity.
+
+Step 4 — Return top-N:
+  Default N = 20 for brand-facing discovery; configurable per brief tier.
+  If rerank_scores has entries for this brief (Section 6 Phase 2), the API
+  layer substitutes rerank_score for the final ordering within the MMR set.
+
+--------------------------------------------------------------------------------
+SECTION 3: COLD-START HANDLING
+--------------------------------------------------------------------------------
+
+NEW CREATORS (profileState = 'aspirational', zero remix history)
+----------------------------------------------------------------
+
+Zero remixes means no remix_labels, no salience scores, no dark-social events.
+The creator embedding cannot be computed from content alone.
+
+Strategy: prior embedding from onboarding survey + deterministic blending.
+
+At registration:
+  Creators complete a language and interest survey (max 5 taps). Survey
+  responses are mapped to entries in the council-governed labels table. Those
+  label display names are assembled into a text string and encoded with the same
+  multilingual transformer used for all other embeddings. The resulting vector
+  is written to TWO columns simultaneously:
+    creator_embeddings.prior_embedding  ← set once at registration; never overwritten
+    creator_embeddings.embedding        ← initially identical to prior_embedding; updated on each remix milestone
+
+  cold_start is set to true and remix_count to 0 at registration.
+
+  Because the prior is encoded by the same transformer as content embeddings
+  and brief embeddings (FIX 3), the prior vector is immediately comparable to
+  brief vectors via cosine_sim. A new creator who marks "Spanish, football,
+  humor" in their survey lands in the same region of the 768-dimensional space
+  as briefs targeting Spanish football entertainment — no training required.
+
+  Scalar signals at cold start:
+    dark_social_ratio = 0.0  (no share events yet)
+    normalized_salience = 0.0  (no clips yet)
+    Score modifier = 1 + 0.15×0 + 0.10×0 = 1.00
+
+  A cold-start creator's final_score equals their cosine_sim exactly (modifier
+  is 1.0). They are not zero-scored and not arbitrarily penalized beyond the
+  maturity gate — they simply receive no secondary signal boost yet.
+
+Blending schedule (shifts as remix_count grows):
+  remix_count 0–4:   embedding = normalize(0.70 × prior_embedding + 0.30 × content_embedding)
+  remix_count 5–9:   embedding = normalize(0.50 × prior_embedding + 0.50 × content_embedding)
+  remix_count 10+:   embedding = normalize(0.20 × prior_embedding + 0.80 × content_embedding)
+  (At remix_count = 10, profileState transitions toward 'blended'; cold_start set to false)
+
+  content_embedding is computed fresh on each call as the salience-weighted mean
+  of all clip encodings to date. prior_embedding is read from the stored column
+  and never recomputed. The result is written to creator_embeddings.embedding.
+
+A pg-boss job creator_embedding_refresh runs on remix.created events. It
+increments remix_count, reads the updated value, selects the blend ratio from
+the schedule above, computes the blended embedding, and upserts
+creator_embeddings.embedding and creator_embeddings.remix_count. The
+prior_embedding column is read but never written by this job.
+
+Aspirational creators are only surfaced to briefs where:
+  creator_profile_floor = 'aspirational_ok'
+Brands opting into this signal seek discovery, not proven reach. This gate
+protects brand trust while giving new creators market exposure. Within the
+aspirational cohort, new creators compete on fidelity and organic performance,
+not on tenure — the score formula contains no maturity penalty (FIX 2).
+
+NEW BRANDS (zero prior campaigns)
+----------------------------------
+
+Brief embedding is always computed from required structured fields (language
+targets, sentiment text, content categories are required at submission) —
+a valid embedding always exists at brief creation time.
+
+The dark-social multiplier term is zeroed for the first campaign:
+  dark_social_ratio treated as 0.0 for all score computations.
+This prevents over-indexing on creators whose dark-social signal is inflated
+by unrelated viral events unconnected to the brand's category.
+
+After the first campaign completes (click/share events accumulate), the full
+formula applies using actual campaign-derived dark-social data.
+
+--------------------------------------------------------------------------------
+SECTION 4: VOICE SYNDICATE UNIFICATION
+--------------------------------------------------------------------------------
+
+The matching engine IS the Voice Syndicate engine. There is no separate
+implementation. The data structures and computation paths are shared.
+
+SHARED DATA STRUCTURE
+---------------------
+
+  match_scores (creator_id, brief_id, cosine_sim, final_score, computed_at)
+
+This single table is the substrate for both surfaces. Brand-facing and
+creator-facing surfaces are two query orientations over identical rows
+computed by an identical formula. cosine_sim is stored separately from
+final_score to enable fast floor checks and to support Phase 2 re-ranking
+(Section 6) without recomputing embeddings.
+
+SHARED PG-BOSS JOB
+------------------
+
+Job name: compute_match_scores
+Payload: { scope: 'brief' | 'creator', id: uuid }
+
+  scope = 'brief':
+    1. Load brief embedding from brand_brief_embeddings.
+    2. Execute ANN query with fidelity floor WHERE clause.
+    3. Compute cosine_sim (exact) and final_score for all admitted creators.
+    4. Upsert into match_scores via INSERT ... ON CONFLICT DO UPDATE,
+       writing both cosine_sim and final_score.
+
+  scope = 'creator':
+    1. Load creator embedding from creator_embeddings.
+    2. For all active briefs, compute cosine_sim and apply floor check.
+    3. Compute final_score for admitted (brief, creator) pairs.
+    4. Upsert into match_scores.
+
+Both paths write to the same table. The job does not know or care which
+surface will read the result.
+
+JOB TRIGGERS
+------------
+
+  1. New brand brief published:
+     compute_match_scores(scope: 'brief', id: brief_id) enqueued immediately.
+
+  2. Creator remix milestone (5th, 10th, 25th remix):
+     creator_embedding_refresh fires first, then
+     compute_match_scores(scope: 'creator', id: creator_id) enqueued.
+
+  3. Nightly stale-score sweep:
+     All active briefs with computed_at < now() - interval '24 hours' are
+     recomputed via compute_match_scores(scope: 'brief').
+
+  4. Nightly rerank-score sweep (Phase 2 only; no-op before Section 6 triggers):
+     All active briefs that have any rerank_scores rows are re-inferred using
+     the current model version via compute_rerank_scores(scope: 'brief').
+     This keeps rerank_scores current on the daily cadence that the Phase 2
+     API query's freshness window requires. Job is registered at deploy time
+     but produces zero work until the re-rank layer is activated.
+
+BRAND-FACING SURFACE (creator discovery)
+-----------------------------------------
+
+  -- Phase 1 (embedding only):
+  SELECT ms.creator_id, ms.final_score
+  FROM match_scores ms
+  WHERE ms.brief_id = $1
+  ORDER BY ms.final_score DESC
+  LIMIT $n;
+
+  -- Phase 2 (after re-rank layer is active; Section 6):
+  SELECT ms.creator_id,
+         COALESCE(rs.rerank_score, ms.final_score) AS effective_score
+  FROM match_scores ms
+  LEFT JOIN rerank_scores rs
+    ON rs.creator_id = ms.creator_id
+   AND rs.brief_id = ms.brief_id
+   AND rs.computed_at > now() - interval '36 hours'
+  WHERE ms.brief_id = $1
+  ORDER BY effective_score DESC
+  LIMIT $n;
+
+  The 36-hour freshness window is intentionally tighter than the nightly sweep
+  cadence (24 hours) to allow for job delays without gaps. If compute_rerank_scores
+  fails for a brief, the COALESCE falls back to final_score (embedding-only ranking)
+  automatically — no silent degradation, no dead scores. An alert fires when
+  rerank_scores rows for an active brief are absent or stale (monitored by the
+  nightly sweep job's completion log).
+
+  The Phase 2 query is a drop-in replacement — one new LEFT JOIN. No schema
+  change to match_scores; no fork.
+
+Brand sees ranked creator cards with match confidence bands.
+
+CREATOR-FACING SURFACE (Voice Syndicate brief opportunities)
+-------------------------------------------------------------
+
+  SELECT brief_id, final_score
+  FROM match_scores
+  WHERE creator_id = $1
+    AND final_score > $threshold
+  ORDER BY final_score DESC
+  LIMIT 5;
+
+Default threshold: 0.55 for brand-side discovery; 0.65 for creator
+notifications (asymmetry is intentional — brands see more candidates;
+creators receive fewer, higher-quality opportunities).
+
+Note: because the fidelity floor (0.45 default) is enforced at score
+computation time, match_scores will never contain rows with cosine_sim below
+the floor. The notification threshold of 0.65 is applied against final_score,
+which is always ≥ cosine_sim × 1.00. The effective minimum cosine_sim for a
+creator notification is therefore ≥ 0.65 / 1.25 ≈ 0.52, well above the floor.
+
+The associated sports moment for each brief (FK on the brief record) is
+surfaced as the creative prompt in the Voice Syndicate feed.
+
+--------------------------------------------------------------------------------
+SECTION 5: BRAND BRIEF SURFACING TO CREATORS
+--------------------------------------------------------------------------------
+
+TRIGGER CONDITIONS
+------------------
+
+Three paths notify creators of relevant briefs, in priority order:
+
+  1. New brief published (highest confidence):
+     After compute_match_scores(scope: 'brief') completes, a downstream job
+     notify_creator_matches queries:
+       match_scores
+       WHERE brief_id = $1
+         AND final_score > 0.65
+         AND creator_id NOT IN (already_notified_for_this_brief)
+     Enqueues one creator_brief_notification job per eligible creator.
+
+  2. Creator embedding refreshed (milestone-triggered):
+     After remix milestones (5th, 10th, 25th), score recomputation may promote
+     a creator above the 0.65 threshold for existing active briefs. If they
+     cross the threshold for the first time, notify_creator_matches fires.
+
+  3. Nightly re-engagement digest (reduced threshold):
+     For creators with no remix activity in 7 days, a nightly job sends a
+     consolidated digest of their top-3 matching active briefs at a reduced
+     threshold of 0.50. This re-engagement surface operates at lower confidence
+     but keeps inactive creators aware of marketplace demand.
+
+RATE LIMITS
+-----------
+
+Enforced at the notification layer, not the score layer:
+  - Max 2 brief notifications per creator per 7-day rolling window
+    (across all three trigger paths)
+  - Aspirational creators: max 1 per 14-day window
+  - A brand brief that receives <20% acceptance rate across 50+ notifications
+    is automatically flagged for human review and paused from further creator
+    surfacing
+
+CREATOR-FACING UX FLOW
+-----------------------
+
+Creators see a "Voice Opportunity" card in their home feed, visually distinct
+from organic moment prompts.
+
+Card shows:
+  - Brand category (not brand name — revealed only after creator taps to
+    expand and opts in)
+  - The sports moment to react to
+  - Estimated audience reach tier (bucketed, not absolute numbers)
+  - Match confidence indicator: Good Fit / Strong Fit / Top Match
+    (derived from final_score in three bands; raw score never shown)
+
+Creator actions:
+  - Accept: enters guided remix flow with brief context
+  - Pass: permanent exclusion for this brief (written to brief_creator_responses;
+    filters all future notification queries for this creator × brief pair)
+  - Snooze (30 days): re-enters the notification queue after the snooze window
+
+TRUST GUARDRAILS
+----------------
+
+  - Feed ordering rule: organic Voice Syndicate prompts always appear before
+    Voice Opportunity cards in the same rendering cycle. Brands cannot buy
+    position above organic discovery.
+  - Brands cannot contact creators directly. All communication routes through
+    the Opportunity Card system, which enforces rate limits and opt-out filters.
+  - Opt-out by brand category: creators can suppress entire brand categories
+    (e.g., gambling, alcohol) at the notification layer.
+
+--------------------------------------------------------------------------------
+SECTION 6: EARNED RE-RANK LAYER — UPGRADE PATH [FIX 5]
+--------------------------------------------------------------------------------
+
+THE CORRECT ARCHITECTURAL VERDICT
+-----------------------------------
+
+The tournament judgment was framed as "embedding beats bandit." The correct
+framing is: embedding now, learned re-rank later. The embedding approach is
+not the permanent final state of the matching engine — it is Phase 1. Phase 2
+is a learned re-ranking layer that attaches to the embedding shortlist once
+sufficient conversion data exists to train it.
+
+This is not a mitigation bolt-on. It is the designed evolution of the
+architecture. Phase 1's embedding shortlist becomes Phase 2's candidate
+generation layer. The re-ranker reorders within the shortlist; it does not
+replace the shortlist. The engine never forks.
+
+WHY THE EMBEDDING IS INSUFFICIENT LONG-TERM
+--------------------------------------------
+
+The formula is hand-tuned at design time. The 0.15 dark-social coefficient,
+the 0.10 salience coefficient, the 0.45 fidelity floor — none of these update
+from observed commercial outcomes. If a creator segment consistently surfaces
+to brands and fails to convert, their match_scores do not degrade. The
+match_scores table is refreshed on content signals alone, not campaign results.
+
+As the marketplace matures and brand conversion data accumulates, the matching
+engine will produce expensive misfires: high-scoring creators who consistently
+fail to deliver campaigns, and lower-scoring creators who consistently convert
+but are systematically under-surfaced. The gap widens silently.
+
+The correct move is to define the upgrade path now, before the gap becomes
+visible in revenue terms.
+
+TRIGGER CONDITIONS FOR ADDING THE RE-RANK LAYER
+-------------------------------------------------
+
+All four conditions must be met before the learned re-ranker is promoted to
+production:
+
+  1. Data volume:
+     ≥ 500 distinct (creator_id, brief_id) pairs with observed conversion
+     outcomes recorded in brief_creator_responses. Conversion outcome = creator
+     accepted the brief AND the campaign reached completion (remix delivered).
+     Reason: below this volume, the re-ranker will overfit to the first few
+     brands' preferences and degrade ranking quality.
+
+  2. Brand diversity:
+     ≥ 15 distinct brand campaigns completed with ≥ 10 creator conversions each.
+     Reason: a model trained on one brand's preferences produces a brand-specific
+     ranker, not a marketplace ranker. Diversity ensures the learned signal
+     generalizes.
+
+  3. Calibration drift threshold:
+     Embedding-only ranking's precision@5 on a held-out validation set (20% of
+     historical brief-creator pairs with known outcomes) falls below 60% in a
+     quarterly evaluation. This is the signal that the static formula is
+     diverging from what the marketplace actually values.
+     Evaluation cadence: quarterly, automated, reported to the matching team.
+     Trigger fires when drift is observed in two consecutive quarterly evals.
+
+  4. Offline validation gate:
+     The re-ranker candidate model must demonstrate precision@5 on the held-out
+     validation set that exceeds the embedding-only baseline by ≥ 10 percentage
+     points before promotion. This gate prevents a regression where an
+     under-trained model degrades ranking quality.
+
+ARCHITECTURE: HOW THE RE-RANK LAYER ATTACHES
+---------------------------------------------
+
+The re-ranker is a lightweight gradient-boosted model (e.g., XGBoost or
+LightGBM) trained on features derived from the embedding shortlist + observed
+outcomes. It does not replace the embedding engine.
+
+  Input to the re-ranker:
+    - cosine_sim (from match_scores.cosine_sim)
+    - dark_social_ratio, normalized_salience (from creator_embeddings)
+    - creator_conversion_rate: fraction of prior brief acceptances that reached
+      campaign completion (from brief_creator_responses aggregation)
+    - brand_category_affinity: creator's historical conversion rate broken out
+      by brand category (from brief → brand FK)
+    - recency_weight: time-decay on historical outcomes (more recent conversions
+      weighted higher)
+
+  Training signal:
+    Label = 1 if creator accepted and completed the brief, 0 otherwise.
+    Objective: pairwise ranking loss (LambdaRank or RankNet) to directly
+    optimize ranking quality, not classification accuracy.
+
+  Shortlist size: embedding generates top-50 candidates (Step 1–2); MMR
+  selects the final top-N (default 20) from those 50 (Step 3); the re-ranker
+  reorders the N=20 MMR-selected candidates. The re-ranker's input is the
+  post-MMR set, not the pre-MMR pool. If N is raised for a brief tier (e.g.,
+  N=30), the re-ranker's input size scales accordingly.
+
+  Inference path:
+    1. compute_match_scores job runs as before, writing cosine_sim and
+       final_score to match_scores (unchanged).
+    2. A new job compute_rerank_scores reads the top-50 final_score entries
+       for a brief, assembles the re-ranker feature vector, runs inference,
+       and writes rerank_score to rerank_scores (the Phase 2 table defined in
+       Section 1 schema).
+    3. The brand-facing API query uses the Phase 2 SELECT with COALESCE
+       (already defined in Section 4). No other code changes.
+
+  Retraining cadence: monthly, triggered by the nightly stale-score sweep job.
+  Model version is stored in rerank_scores.model_version for auditability.
+
+  Rollback: if the re-ranker's online A/B experiment shows no lift or degraded
+  conversion after 30 days, the COALESCE in the API query falls back to
+  final_score by expiring or dropping rows from rerank_scores. Zero schema
+  changes required.
+
+WHAT THE BANDIT WON AND WHERE IT GOES
+---------------------------------------
+
+The bandit (Approach 4) won tournament criterion 3 (dark-social diffusion
+signal) because its per-cluster arm matrices could learn that Nigerian Pidgin
+creators convert specifically for Telecom Africa briefs — a genuine advantage
+that a static 0.15 dark-social coefficient cannot match.
+
+This advantage is absorbed by the re-rank layer's brand_category_affinity
+feature. Once sufficient data exists, the re-ranker learns the same cross-
+cluster conversion patterns the bandit would have discovered online, but
+offline (lower variance) and with the embedding's full language fidelity
+guarantee as the shortlist foundation.
+
+The bandit's reward loop is not "bolted on" — it is what becomes
+creator_conversion_rate and brand_category_affinity in the re-ranker's
+feature set. The embedding shortlist ensures no high-fidelity creator is
+invisible to that learning process.
+
+================================================================================
+TOURNAMENT JUDGMENT: WHY EMBEDDING BEAT THE BANDIT
+================================================================================
+
+Embedding won because it commits to the product's core differentiator —
+80+ language cultural fidelity — as a structural property rather than a
+learned approximation. The multilingual sentence transformer places language
+and cultural voice in continuous geometric space trained on hundreds of
+millions of multilingual examples, far richer than the 32-dim matrix the
+bandit could learn from MadLipz's still-thin remix graph. The cold-start
+story is deterministic: a survey maps to label embeddings on a fixed blending
+schedule using the same transformer, and worst-case is a conservative score,
+not undefined behavior. Stack fit is clean: pgvector is a first-class Supabase
+extension, pg-boss handles refresh jobs, Drizzle handles the schema, and
+match_scores is a flat relation. Voice Syndicate unification is not an
+architectural metaphor — it is literally the same table queried in two
+directions, with nothing to synchronize and no drift surface.
+
+The bandit won only on dark-social signal leverage (criterion 3) because its
+per-cluster arm matrices could learn conversion patterns the embedding approach
+cannot match with a static coefficient. This advantage is real but time-deferred:
+it requires a trained model, which requires training data, which requires a
+functioning marketplace first. The Section 6 upgrade path captures this
+advantage once the data exists without forking the engine.
+
+The correct verdict: embedding is the right foundation for a marketplace that
+must be trustworthy from day zero. The learned re-rank layer is the right
+evolution once the marketplace has enough signal to calibrate it.
+
+================================================================================
+APPENDIX: ELIMINATED APPROACHES AND DISQUALIFICATION REASONS
+================================================================================
+
+APPROACH 2: Collaborative Filtering — ELIMINATED
+-------------------------------------------------
+Constraint 2 FAIL: Language codes were added as "pseudo-labels in the item
+space." The score formula (collaborative_score × profile_weight + 0.15 ×
+salience_bonus) contains no language term. Language fidelity is not guaranteed;
+it depends on whether the factorization organically clusters language codes.
+
+Constraint 3 FAIL: Because language is a pseudo-label, replacing all language
+codes with genre codes would produce an identical algorithm. The multilingual
+creator base is not architecturally exploited.
+
+Additional incoherence: Cold-start rule stated "profile_weight=0.4 means
+aspirational creators don't appear in brand shortlists" — this is not entailed
+by the weight value; the design provided no actual gating mechanism.
+
+APPROACH 3: Semantic Graph / Spreading Activation — ELIMINATED
+---------------------------------------------------------------
+Fatal internal coherence failure (scoring mechanism mathematically broken):
+
+The DARK_DIFFUSED edge type carries a decay coefficient of 1.10, described as
+a "boost, not decay." Spreading activation computes activation as the product
+of edge weights along a path (A(n) = A(source) × ∏ edge_weight × decay_coeff).
+Any path containing multiple DARK_DIFFUSED edges produces unbounded activation
+(1.10^10 ≈ 2.59 for 10 hops). The design specifies no activation ceiling or
+hop-count limit for this edge type. Ranking is therefore unstable and
+non-convergent as described.
+
+Secondary coherence failure: BriefNodes are described as "ephemeral, not
+persisted." The creator-facing Voice Syndicate path requires traversal to
+"return BriefNodes that are active." Ephemeral nodes cannot be returned after
+the traversal job completes — they are not in the graph. Direct contradiction.
+
+APPROACH 5: Dark-Social Diffusion Graph + ML Re-Ranker — ELIMINATED
+--------------------------------------------------------------------
+Fatal internal coherence failure (primary novel claim invalidated):
+
+The design's unique contribution is chain depth reconstruction via
+parent_event_id: tracking how many hops a clip traveled through private
+channels. But parent_event_id linkage requires knowing which click event
+generated each subsequent share. Dark-social channels (WhatsApp, iMessage,
+Telegram) do not transmit referrer headers — they structurally erase the
+linkage data that parent_event_id chains depend on. The primary novel claim
+of the design cannot be implemented using the mechanism described.
+
+Constraint 2 FAIL: language_fidelity_bonus is defined as
+  1.0 + 0.3 × (fraction of dark-social diffusion in brief's target language)
+Maximum contribution: a 30% multiplicative bonus. Language is a capped
+modifier on top of cluster-based scoring, not a first-class ranked dimension.
+Additionally, dark_social_ratio_gate and salience_floor_gate are explicit hard
+filters in the score formula — the approach uses gates despite the constraint
+explicitly prohibiting treatment of language as a hard filter.
+
+================================================================================
+END OF REPORT (REVISION 2)
+================================================================================

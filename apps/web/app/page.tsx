@@ -1,7 +1,5 @@
+import Feed2D from "./Feed2D";
+
 export default function Home() {
-  return (
-    <main className="p-8">
-      <h1 className="text-2xl font-bold">MadLipz</h1>
-    </main>
-  );
+  return <Feed2D />;
 }
