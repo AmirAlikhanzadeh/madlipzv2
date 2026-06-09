@@ -24,6 +24,7 @@ export default function Feed2D() {
   const [colIdx, setColIdx] = useState(0);
   const [entering, setEntering] = useState(false);
   const prevKey = useRef("");
+  const touchStart = useRef<{ x: number; y: number } | null>(null);
 
   const totalRows = FEED_ROWS.length;
   const totalCols = useCallback((r: number) => 1 + FEED_ROWS[r].remixes.length, []);
@@ -67,10 +68,33 @@ export default function Feed2D() {
 
   const cellKey = `${rowIdx}-${colIdx}`;
 
+  function onTouchStart(e: React.TouchEvent) {
+    const t = e.touches[0];
+    touchStart.current = { x: t.clientX, y: t.clientY };
+  }
+
+  function onTouchEnd(e: React.TouchEvent) {
+    if (!touchStart.current) return;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - touchStart.current.x;
+    const dy = t.clientY - touchStart.current.y;
+    touchStart.current = null;
+    if (Math.abs(dx) < 10 && Math.abs(dy) < 10) return;
+    if (Math.abs(dy) > Math.abs(dx)) {
+      if (dy < -40) navigate("down");
+      else if (dy > 40) navigate("up");
+    } else {
+      if (dx < -40) navigate("right");
+      else if (dx > 40) navigate("left");
+    }
+  }
+
   return (
     <div
       className="relative overflow-hidden select-none"
       style={{ height: "100dvh" }}
+      onTouchStart={onTouchStart}
+      onTouchEnd={onTouchEnd}
     >
       {/* ── Background ── */}
       <div className="absolute inset-0 transition-all duration-700 ease-out" key={`bg-${rowIdx}`}>
@@ -81,9 +105,9 @@ export default function Feed2D() {
           className="w-full h-full object-cover scale-110"
           style={{ filter: "blur(28px) saturate(120%)", transition: "filter 0.7s ease" }}
         />
-        {/* Deep vignette */}
-        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 80% 80% at 50% 50%, rgba(7,7,13,0.3) 0%, rgba(7,7,13,0.85) 100%)" }} />
-        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(7,7,13,0.98) 0%, rgba(7,7,13,0.4) 45%, rgba(7,7,13,0.5) 100%)" }} />
+        {/* Cinematic vignette — dark at bottom for text, subtle at top for atmosphere */}
+        <div className="absolute inset-0" style={{ background: "radial-gradient(ellipse 100% 70% at 50% 40%, rgba(7,7,13,0.0) 0%, rgba(7,7,13,0.65) 100%)" }} />
+        <div className="absolute inset-0" style={{ background: "linear-gradient(to top, rgba(7,7,13,0.97) 0%, rgba(7,7,13,0.55) 38%, rgba(7,7,13,0.1) 65%, rgba(7,7,13,0.25) 100%)" }} />
       </div>
 
       {/* ── Main content card ── */}
@@ -91,9 +115,9 @@ export default function Feed2D() {
         key={cellKey}
         className="absolute inset-0 flex items-end justify-center"
         style={{
-          paddingBottom: "7rem",
-          paddingLeft: "1.5rem",
-          paddingRight: "5rem",
+          paddingBottom: "6rem",
+          paddingLeft: "1rem",
+          paddingRight: "3.5rem",
           animation: "fadeUp 0.42s cubic-bezier(0.16,1,0.3,1) both",
         }}
       >
@@ -162,14 +186,15 @@ export default function Feed2D() {
           {/* Actions */}
           <div className="flex items-center gap-2.5 mb-5">
             <button
-              className="flex items-center gap-2 px-4 py-2.5 rounded-full text-sm font-semibold font-sans text-white transition-all"
-              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", backdropFilter: "blur(8px)" }}
+              className="flex items-center gap-2 px-4 py-3 rounded-full text-sm font-semibold font-sans text-white transition-all"
+              style={{ background: "rgba(255,255,255,0.1)", border: "1px solid rgba(255,255,255,0.15)", backdropFilter: "blur(8px)", minHeight: 44 }}
             >
               <PlayIcon /> Play
             </button>
             <Link
               href={`/studio/${clip.id}`}
-              className="btn-accent flex items-center gap-2 px-5 py-2.5 text-sm font-sans"
+              className="btn-accent flex items-center gap-2 px-5 py-3 text-sm font-sans flex-1 justify-center"
+              style={{ minHeight: 44 }}
             >
               🎙 Dub this
             </Link>
@@ -217,23 +242,28 @@ export default function Feed2D() {
       </div>
 
       {/* ── Right-side vertical nav ── */}
-      <div className="absolute right-4 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-2.5">
+      <div className="absolute right-2 top-1/2 -translate-y-1/2 z-20 flex flex-col gap-1.5 items-center">
         <NavArrow dir="up" enabled={canUp} onClick={() => navigate("up")} label="↑" />
 
-        {/* Clip position dots */}
-        <div className="flex flex-col items-center gap-1.5 py-2">
+        {/* Clip position dots — each wrapped for 44px touch target */}
+        <div className="flex flex-col items-center gap-0.5 py-1">
           {FEED_ROWS.map((_, i) => (
             <button
               key={i}
               onClick={() => { setRowIdx(i); setColIdx(0); }}
-              className="rounded-full transition-all duration-300"
-              style={{
-                width: 6,
-                height: i === rowIdx ? 20 : 6,
-                background: i === rowIdx ? "linear-gradient(180deg, #9333ea, #ec4899)" : "rgba(255,255,255,0.25)",
-                boxShadow: i === rowIdx ? "0 0 8px #9333ea66" : "none",
-              }}
-            />
+              className="flex items-center justify-center transition-all duration-300"
+              style={{ width: 28, height: 20 }}
+            >
+              <div
+                className="rounded-full transition-all duration-300"
+                style={{
+                  width: 5,
+                  height: i === rowIdx ? 18 : 5,
+                  background: i === rowIdx ? "linear-gradient(180deg, #9333ea, #ec4899)" : "rgba(255,255,255,0.25)",
+                  boxShadow: i === rowIdx ? "0 0 8px #9333ea66" : "none",
+                }}
+              />
+            </button>
           ))}
         </div>
 
@@ -244,8 +274,8 @@ export default function Feed2D() {
       {canLeft && (
         <button
           onClick={() => navigate("left")}
-          className="absolute left-4 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center text-sm font-bold transition-all"
-          style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}
+          className="absolute left-2 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center text-sm font-bold transition-all"
+          style={{ width: 44, height: 44, borderRadius: "50%", background: "rgba(255,255,255,0.08)", border: "1px solid rgba(255,255,255,0.12)", color: "rgba(255,255,255,0.7)", backdropFilter: "blur(8px)" }}
         >
           ←
         </button>
@@ -253,8 +283,8 @@ export default function Feed2D() {
       {canRight && (
         <button
           onClick={() => navigate("right")}
-          className="absolute right-16 top-1/2 -translate-y-1/2 z-20 flex items-center justify-center text-sm font-bold transition-all"
-          style={{ width: 40, height: 40, borderRadius: "50%", background: "rgba(147,51,234,0.2)", border: "1px solid rgba(147,51,234,0.4)", color: "white", backdropFilter: "blur(8px)", boxShadow: "0 0 16px #9333ea33" }}
+          className="absolute top-1/2 -translate-y-1/2 z-20 flex items-center justify-center text-sm font-bold transition-all"
+          style={{ right: "2.5rem", width: 44, height: 44, borderRadius: "50%", background: "rgba(147,51,234,0.2)", border: "1px solid rgba(147,51,234,0.4)", color: "white", backdropFilter: "blur(8px)", boxShadow: "0 0 16px #9333ea33" }}
         >
           →
         </button>
@@ -305,8 +335,8 @@ function NavArrow({ dir, enabled, onClick, label }: { dir: string; enabled: bool
       disabled={!enabled}
       className="flex items-center justify-center text-sm font-bold transition-all duration-200"
       style={{
-        width: 36,
-        height: 36,
+        width: 44,
+        height: 44,
         borderRadius: "50%",
         background: enabled ? "rgba(255,255,255,0.08)" : "rgba(255,255,255,0.02)",
         border: `1px solid ${enabled ? "rgba(255,255,255,0.12)" : "rgba(255,255,255,0.04)"}`,

@@ -28,19 +28,19 @@ export default function Nav() {
       </Link>
 
       {/* Links */}
-      <div className="flex items-center gap-1">
+      <div className="flex items-center gap-0.5">
         {[
-          { href: "/", label: "Feed" },
-          { href: "/marketplace", label: "Marketplace" },
-          { href: "/profile", label: "Profile" },
-        ].map(({ href, label }) => {
+          { href: "/", label: "Feed", short: "Feed" },
+          { href: "/marketplace", label: "Marketplace", short: "Market" },
+          { href: "/profile", label: "Profile", short: "Profile" },
+        ].map(({ href, label, short }) => {
           const active = path === href || path.startsWith(href + "/") && href !== "/";
           const isActive = href === "/" ? path === "/" : path.startsWith(href);
           return (
             <Link
               key={href}
               href={href}
-              className="px-3.5 py-1.5 rounded-lg text-sm font-medium font-sans transition-all duration-200"
+              className="px-2.5 py-1.5 rounded-lg text-xs sm:text-sm font-medium font-sans transition-all duration-200"
               style={{
                 color: isActive ? "white" : isHome ? "rgba(255,255,255,0.55)" : "var(--muted)",
                 background: isActive
@@ -49,7 +49,8 @@ export default function Nav() {
                 border: isActive ? `1px solid ${isHome ? "rgba(255,255,255,0.15)" : "rgba(147,51,234,0.25)"}` : "1px solid transparent",
               }}
             >
-              {label}
+              <span className="sm:hidden">{short}</span>
+              <span className="hidden sm:inline">{label}</span>
             </Link>
           );
         })}

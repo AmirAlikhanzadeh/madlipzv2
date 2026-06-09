@@ -63,7 +63,7 @@ export default function StudioClient({ clip }: { clip: Clip }) {
 
         {/* ── Right: studio ── */}
         <div
-          className="flex-1 flex flex-col p-6 md:p-10 overflow-y-auto"
+          className="flex-1 flex flex-col p-5 md:p-10 overflow-y-auto"
           style={{ borderLeft: "1px solid var(--border)" }}
         >
           {stage === "setup" && (

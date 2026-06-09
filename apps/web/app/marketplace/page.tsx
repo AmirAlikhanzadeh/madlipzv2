@@ -94,7 +94,7 @@ export default function MarketplacePage() {
                   animation: `fadeUp 0.4s cubic-bezier(0.16,1,0.3,1) ${0.05 * idx}s both`,
                 }}
               >
-                <div className="relative z-10 flex items-start gap-4">
+                <div className="relative z-10 flex items-start gap-3 sm:gap-4">
                   {/* Brand logo */}
                   <div className="relative flex-shrink-0">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
