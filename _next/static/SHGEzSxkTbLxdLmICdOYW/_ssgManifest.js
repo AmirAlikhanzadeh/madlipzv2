@@ -1,0 +1,1 @@
+self.__SSG_MANIFEST=new Set(["\u002Fmarketplace\u002F[campaignId]","\u002Fstudio\u002F[clipId]"]);self.__SSG_MANIFEST_CB&&self.__SSG_MANIFEST_CB()
