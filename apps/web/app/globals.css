@@ -3,21 +3,99 @@
 @tailwind utilities;
 
 :root {
-  --bg: #0a0a0a;
-  --surface: #141414;
-  --surface-2: #1e1e1e;
-  --border: #2a2a2a;
-  --accent: #ff3b6b;
-  --text: #f0f0f0;
-  --muted: #888888;
+  --bg: #07070d;
+  --surface: #0c0c18;
+  --surface-2: #141424;
+  --surface-3: #1a1a30;
+  --border: #1e1e32;
+  --border-2: #2a2a44;
+  --accent: #9333ea;
+  --accent-2: #ec4899;
+  --accent-3: #22d3ee;
+  --accent-gradient: linear-gradient(135deg, #9333ea, #ec4899);
+  --text: #f4f3ff;
+  --muted: #64637a;
+  --muted-2: #4a4960;
 }
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+html { -webkit-font-smoothing: antialiased; text-rendering: optimizeLegibility; }
 
 body {
   background: var(--bg);
   color: var(--text);
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  min-height: 100dvh;
 }
 
-.clip-card:hover .clip-overlay {
-  opacity: 1;
+/* ── Gradient text utility ── */
+.gradient-text {
+  background: var(--accent-gradient);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
 }
+
+/* ── Glass panel ── */
+.glass {
+  background: rgba(12, 12, 24, 0.7);
+  backdrop-filter: blur(16px) saturate(180%);
+  -webkit-backdrop-filter: blur(16px) saturate(180%);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+.glass-light {
+  background: rgba(255,255,255,0.04);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+
+/* ── Accent button ── */
+.btn-accent {
+  background: linear-gradient(135deg, #9333ea, #ec4899);
+  color: white;
+  font-weight: 600;
+  border-radius: 9999px;
+  position: relative;
+  overflow: hidden;
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.btn-accent::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.15), transparent);
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+.btn-accent:hover { transform: translateY(-1px); box-shadow: 0 0 32px #9333ea55, 0 8px 24px rgba(0,0,0,0.4); }
+.btn-accent:hover::after { opacity: 1; }
+.btn-accent:active { transform: scale(0.97); }
+
+/* ── Gradient border card ── */
+.card-glow {
+  position: relative;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.card-glow::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  background: linear-gradient(135deg, #9333ea33, #ec489922, transparent 60%);
+  border-radius: inherit;
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0;
+  transition: opacity 0.3s ease;
+}
+.card-glow:hover::before { opacity: 1; }
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar { width: 4px; height: 4px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-2); border-radius: 9999px; }
+
+/* ── Selection ── */
+::selection { background: #9333ea44; color: white; }

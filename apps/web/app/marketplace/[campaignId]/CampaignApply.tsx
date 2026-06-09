@@ -4,20 +4,20 @@ import { useState } from "react";
 import { MY_APPLICATIONS, type Campaign } from "@/lib/mock-data";
 
 export default function CampaignApply({ campaign }: { campaign: Campaign }) {
-  const existingApp = MY_APPLICATIONS.find((a) => a.campaignId === campaign.id);
-  const [applied, setApplied] = useState(!!existingApp);
-  const [status] = useState(existingApp?.status ?? null);
+  const existing = MY_APPLICATIONS.find((a) => a.campaignId === campaign.id);
+  const [applied, setApplied] = useState(!!existing);
+  const [status] = useState(existing?.status ?? null);
 
   if (status === "accepted") {
     return (
       <div
-        className="rounded-2xl p-5 text-center"
-        style={{ background: "rgba(16,185,129,0.1)", border: "1px solid #10b981" }}
+        className="rounded-2xl p-6 text-center"
+        style={{ background: "rgba(16,185,129,0.08)", border: "1px solid rgba(16,185,129,0.3)" }}
       >
-        <p className="text-2xl mb-2">🎉</p>
-        <p className="font-bold text-white mb-1">You&apos;ve been accepted!</p>
-        <p className="text-sm" style={{ color: "#10b981" }}>
-          A contract will be sent to your profile within 24 hours.
+        <div className="text-3xl mb-3">🎉</div>
+        <p className="font-display font-bold text-xl text-ink mb-2">You&apos;re in</p>
+        <p className="text-sm font-sans" style={{ color: "#34d399" }}>
+          Contract incoming from {campaign.brand.name} within 24 hours.
         </p>
       </div>
     );
@@ -26,13 +26,13 @@ export default function CampaignApply({ campaign }: { campaign: Campaign }) {
   if (applied) {
     return (
       <div
-        className="rounded-2xl p-5 text-center"
-        style={{ background: "rgba(255,255,255,0.04)", border: "1px solid var(--border)" }}
+        className="rounded-2xl p-6 text-center"
+        style={{ background: "var(--surface)", border: "1px solid var(--border)" }}
       >
-        <p className="text-xl mb-2">✓</p>
-        <p className="font-semibold text-white mb-1">Application submitted</p>
-        <p className="text-sm" style={{ color: "var(--muted)" }}>
-          {campaign.brand.name} will review your profile and respond within 3 days.
+        <div className="text-3xl mb-3">✓</div>
+        <p className="font-display font-bold text-xl text-ink mb-2">Application sent</p>
+        <p className="text-sm font-sans" style={{ color: "var(--muted)" }}>
+          {campaign.brand.name} will review your voice profile and respond within 3 days.
         </p>
       </div>
     );
@@ -41,8 +41,7 @@ export default function CampaignApply({ campaign }: { campaign: Campaign }) {
   return (
     <button
       onClick={() => setApplied(true)}
-      className="w-full py-4 rounded-2xl font-bold text-white text-lg transition-transform active:scale-95"
-      style={{ background: "var(--accent)" }}
+      className="btn-accent w-full py-4 rounded-2xl font-display font-bold text-lg text-white"
     >
       Apply to this campaign →
     </button>
