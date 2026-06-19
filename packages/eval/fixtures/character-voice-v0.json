@@ -1,0 +1,29 @@
+{
+  "id": "character-voice-v0",
+  "remixes": [
+    {
+      "remixId": "00000000-0000-4000-8000-000000000010",
+      "transcript": "[in commentator voice] And HERE he comes, ladies and gentlemen, with the world's saddest dab.",
+      "expected": [
+        { "labelKey": "parody", "source": "human" },
+        { "labelKey": "character-voice", "source": "human" },
+        { "labelKey": "mocking", "source": "human" }
+      ]
+    },
+    {
+      "remixId": "00000000-0000-4000-8000-000000000011",
+      "transcript": "Translated to Hindi over the original clip, plus a Bollywood film score sting at the end.",
+      "expected": [
+        { "labelKey": "localization", "source": "human" },
+        { "labelKey": "parody", "source": "human" }
+      ]
+    },
+    {
+      "remixId": "00000000-0000-4000-8000-000000000012",
+      "transcript": "Only the group chat will get this one. RIP Greg, 2018-2019.",
+      "expected": [
+        { "labelKey": "in-joke", "source": "human" }
+      ]
+    }
+  ]
+}

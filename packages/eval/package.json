@@ -14,10 +14,17 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "lint": "eslint src --ext .ts",
+    "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },
+  "dependencies": {
+    "@madlipz/schema": "workspace:*",
+    "@madlipz/taxonomy": "workspace:*"
+  },
   "devDependencies": {
+    "@types/node": "^22.9.0",
     "eslint": "^9.14.0",
-    "typescript": "^5.6.3"
+    "typescript": "^5.6.3",
+    "vitest": "^2.1.4"
   }
 }

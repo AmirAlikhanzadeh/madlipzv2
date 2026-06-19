@@ -12,6 +12,7 @@
     "typecheck": "tsc --noEmit"
   },
   "dependencies": {
+    "@madlipz/eval": "workspace:*",
     "pg-boss": "^12.18.2"
   },
   "devDependencies": {

@@ -1,0 +1,30 @@
+{
+  "id": "sports-reaction-v0",
+  "remixes": [
+    {
+      "remixId": "00000000-0000-4000-8000-000000000001",
+      "transcript": "Bro that header was UNREAL, are you kidding me, what a moment, GOAT behavior.",
+      "expected": [
+        { "labelKey": "dramatic", "source": "human" },
+        { "labelKey": "celebratory", "source": "human" },
+        { "labelKey": "reaction", "source": "human" }
+      ]
+    },
+    {
+      "remixId": "00000000-0000-4000-8000-000000000002",
+      "transcript": "Imagine paying for season tickets to watch this. Embarrassing. Just retire already.",
+      "expected": [
+        { "labelKey": "cynical", "source": "human" },
+        { "labelKey": "mocking", "source": "human" }
+      ]
+    },
+    {
+      "remixId": "00000000-0000-4000-8000-000000000003",
+      "transcript": "Look at him hug his kid after the whistle. That's the whole sport right there, man.",
+      "expected": [
+        { "labelKey": "wholesome", "source": "human" },
+        { "labelKey": "affectionate", "source": "human" }
+      ]
+    }
+  ]
+}
